@@ -2,20 +2,22 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <title>비눗방울 예술 (저장 기능 포함)</title>
+  <title>비눗방울 예술 (반응형 버전)</title>
   <style>
-    body {
+    html, body {
       margin: 0;
+      padding: 0;
+      height: 100%;
       overflow: hidden;
-      background-color: #ffffff;
+      background-color: #fff;
       display: flex;
       flex-direction: column;
       align-items: center;
-      height: 100vh;
+      justify-content: center;
     }
-    #canvas {
+    canvas {
       display: block;
-      flex-grow: 1;
+      background-color: #ffffff;
       cursor: pointer;
     }
     #saveBtn {
@@ -32,6 +34,7 @@
       cursor: pointer;
       box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
       transition: background-color 0.25s;
+      z-index: 10;
     }
     #saveBtn:hover {
       background-color: #45a049;
@@ -41,13 +44,14 @@
       bottom: 80px;
       left: 50%;
       transform: translateX(-50%);
-      background-color: rgba(0, 0, 0, 0.7);
+      background-color: rgba(0,0,0,0.7);
       color: white;
       padding: 10px 20px;
       border-radius: 6px;
       font-size: 15px;
       opacity: 0;
       transition: opacity 0.5s ease;
+      z-index: 10;
     }
     #toast.show {
       opacity: 1;
@@ -62,10 +66,31 @@
   <script>
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
     const saveBtn = document.getElementById("saveBtn");
     const toast = document.getElementById("toast");
+
+    // ✅ 화면 종류별 캔버스 크기 설정 함수
+    function resizeCanvas() {
+      const ratio = window.innerWidth / window.innerHeight;
+      if (ratio > 1.2) {
+        // 📺 PC: 넓은 화면 → 16:9 비율 유지
+        const width = window.innerWidth;
+        const height = width * (9 / 16);
+        canvas.width = width;
+        canvas.height = height;
+      } else {
+        // 📱 모바일: 세로 화면 → 꽉 채우기
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+      }
+    }
+
+    // 처음 실행 시와 창 크기 변경 시 항상 리셋
+    window.addEventListener("resize", () => {
+      resizeCanvas();
+      resetScene();
+    });
+    resizeCanvas();
 
     class Bubble {
       constructor(width, height) {
@@ -90,18 +115,16 @@
           this.color = `rgb(${r},${g},${b})`;
         }
 
-        this.dx = (Math.random() - 0.5) * 4;
-        this.dy = (Math.random() - 0.5) * 4;
+        this.dx = (Math.random() - 0.5) * 3.5;
+        this.dy = (Math.random() - 0.5) * 3.5;
       }
 
       move() {
         if (!this.popped) {
           this.x += this.dx;
           this.y += this.dy;
-          if (this.x - this.radius < 0 || this.x + this.radius > this.width)
-            this.dx *= -1;
-          if (this.y - this.radius < 0 || this.y + this.radius > this.height)
-            this.dy *= -1;
+          if (this.x - this.radius < 0 || this.x + this.radius > this.width) this.dx *= -1;
+          if (this.y - this.radius < 0 || this.y + this.radius > this.height) this.dy *= -1;
         }
       }
 
@@ -111,11 +134,9 @@
 
       updatePop() {
         if (this.popped) {
-          this.expandRadius += 2.4;
-          this.waveRadius += 4.5;
-          if (this.expandRadius > this.radius * 6.5) {
-            this.opacity = 0;
-          }
+          this.expandRadius += 2.3;
+          this.waveRadius += 4.2;
+          if (this.expandRadius > this.radius * 6.0) this.opacity = 0;
         }
       }
 
@@ -168,9 +189,7 @@
 
     function resetScene() {
       bubbles = [];
-      for (let i = 0; i < 25; i++) {
-        bubbles.push(new Bubble(canvas.width, canvas.height));
-      }
+      for (let i = 0; i < 25; i++) bubbles.push(new Bubble(canvas.width, canvas.height));
       colorCtx.clearRect(0, 0, canvas.width, canvas.height);
       popped = false;
       fadeStart = null;
@@ -198,9 +217,8 @@
           b.draw(ctx);
         });
 
-        // 🎨 색 퍼짐 효과
         if (elapsed < 4.0) {
-          let colors = bubbles.map((b) => b.color);
+          const colors = bubbles.map((b) => b.color);
           for (let i = 0; i < 12; i++) {
             const c = colors[Math.floor(Math.random() * colors.length)];
             const r = 20 + Math.random() * 70;
@@ -224,7 +242,7 @@
       requestAnimationFrame(animationLoop);
     }
 
-    /* ✅ 클릭/터치 시 폭발 */
+    // 클릭/터치 시 비눗방울 터짐
     function handlePopEvent() {
       if (!popped) {
         popped = true;
@@ -234,14 +252,13 @@
         resetScene();
       }
     }
-
     canvas.addEventListener("click", handlePopEvent);
     canvas.addEventListener("touchstart", (e) => {
       e.preventDefault();
       handlePopEvent();
     });
 
-    /* ✅ 저장 기능 추가 */
+    // 저장 버튼 기능
     function saveCanvasImage() {
       const now = new Date();
       const timeStr =
@@ -256,12 +273,10 @@
         String(now.getSeconds()).padStart(2, "0");
 
       const filename = `bubble_art_${timeStr}.png`;
-
       const link = document.createElement("a");
       link.download = filename;
       link.href = canvas.toDataURL("image/png");
       link.click();
-
       showToast();
     }
 
