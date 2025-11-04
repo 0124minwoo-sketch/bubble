@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <title>비눗방울 예술 (반응형 버전)</title>
+  <title>비눗방울 예술 (공유 기능 추가)</title>
   <style>
     html, body {
       margin: 0;
@@ -14,21 +14,20 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
+      font-family: "Pretendard", sans-serif;
     }
     canvas {
       display: block;
       background-color: #ffffff;
       cursor: pointer;
     }
-    #saveBtn {
+    .btn {
       position: fixed;
       bottom: 20px;
-      right: 20px;
-      background-color: #4CAF50;
-      color: white;
+      padding: 12px 20px;
       border: none;
       border-radius: 8px;
-      padding: 12px 20px;
+      color: white;
       font-weight: bold;
       font-size: 15px;
       cursor: pointer;
@@ -36,9 +35,16 @@
       transition: background-color 0.25s;
       z-index: 10;
     }
-    #saveBtn:hover {
-      background-color: #45a049;
+    #saveBtn {
+      right: 20px;
+      background-color: #4CAF50;
     }
+    #shareBtn {
+      right: 130px;
+      background-color: #2196F3;
+    }
+    #saveBtn:hover { background-color: #45a049; }
+    #shareBtn:hover { background-color: #1976D2; }
     #toast {
       position: fixed;
       bottom: 80px;
@@ -60,32 +66,33 @@
 </head>
 <body>
   <canvas id="canvas"></canvas>
-  <button id="saveBtn">💾 저장</button>
+  <button class="btn" id="shareBtn">📤 공유</button>
+  <button class="btn" id="saveBtn">💾 저장</button>
   <div id="toast">저장되었습니다!</div>
 
   <script>
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
     const saveBtn = document.getElementById("saveBtn");
+    const shareBtn = document.getElementById("shareBtn");
     const toast = document.getElementById("toast");
 
-    // ✅ 화면 종류별 캔버스 크기 설정 함수
+    // ✅ 반응형 비율 유지
     function resizeCanvas() {
       const ratio = window.innerWidth / window.innerHeight;
       if (ratio > 1.2) {
-        // 📺 PC: 넓은 화면 → 16:9 비율 유지
+        // PC: 16:9
         const width = window.innerWidth;
         const height = width * (9 / 16);
         canvas.width = width;
         canvas.height = height;
       } else {
-        // 📱 모바일: 세로 화면 → 꽉 채우기
+        // 모바일: 전체 화면
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
       }
     }
 
-    // 처음 실행 시와 창 크기 변경 시 항상 리셋
     window.addEventListener("resize", () => {
       resizeCanvas();
       resetScene();
@@ -104,7 +111,6 @@
         this.waveRadius = this.radius;
         this.opacity = 1.0;
 
-        // 🎨 25% 확률로 흰색 비눗방울
         if (Math.random() < 0.25) {
           const shade = 220 + Math.random() * 35;
           this.color = `rgb(${shade},${shade},${shade})`;
@@ -128,9 +134,7 @@
         }
       }
 
-      pop() {
-        this.popped = true;
-      }
+      pop() { this.popped = true; }
 
       updatePop() {
         if (this.popped) {
@@ -242,7 +246,6 @@
       requestAnimationFrame(animationLoop);
     }
 
-    // 클릭/터치 시 비눗방울 터짐
     function handlePopEvent() {
       if (!popped) {
         popped = true;
@@ -258,34 +261,47 @@
       handlePopEvent();
     });
 
-    // 저장 버튼 기능
+    /* ✅ 저장 기능 */
     function saveCanvasImage() {
       const now = new Date();
-      const timeStr =
-        now.getFullYear() +
-        "-" +
-        String(now.getMonth() + 1).padStart(2, "0") +
-        "-" +
-        String(now.getDate()).padStart(2, "0") +
-        "_" +
-        String(now.getHours()).padStart(2, "0") +
-        String(now.getMinutes()).padStart(2, "0") +
-        String(now.getSeconds()).padStart(2, "0");
-
+      const timeStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}_${String(now.getHours()).padStart(2,"0")}${String(now.getMinutes()).padStart(2,"0")}${String(now.getSeconds()).padStart(2,"0")}`;
       const filename = `bubble_art_${timeStr}.png`;
       const link = document.createElement("a");
       link.download = filename;
       link.href = canvas.toDataURL("image/png");
       link.click();
-      showToast();
+      showToast("저장되었습니다!");
     }
 
-    function showToast() {
+    /* ✅ 공유 기능 */
+    async function shareCanvasImage() {
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+      const file = new File([blob], "bubble_art.png", { type: "image/png" });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            title: "비눗방울 아트 작품 🎨",
+            text: "내가 만든 비눗방울 아트!",
+            files: [file],
+          });
+          showToast("✅ 공유되었습니다!");
+        } catch (err) {
+          console.log("공유 취소", err);
+        }
+      } else {
+        showToast("❌ 이 브라우저에서는 공유를 지원하지 않습니다.");
+      }
+    }
+
+    function showToast(msg) {
+      toast.textContent = msg;
       toast.classList.add("show");
       setTimeout(() => toast.classList.remove("show"), 2000);
     }
 
     saveBtn.addEventListener("click", saveCanvasImage);
+    shareBtn.addEventListener("click", shareCanvasImage);
 
     requestAnimationFrame(animationLoop);
   </script>
