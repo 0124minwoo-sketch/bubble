@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>비눗방울 예술 (웹 버전)</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: #ffffff;
+    }
+    canvas {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+class Bubble {
+  constructor(width, height) {
+    this.width = width;
+    this.height = height;
+    this.x = Math.random() * (width - 200) + 100;
+    this.y = Math.random() * (height - 200) + 100;
+    this.radius = 25 + Math.random() * 35;
+    this.popped = false;
+    this.expandRadius = this.radius;
+    this.waveRadius = this.radius;
+    this.opacity = 1.0;
+
+    // 🎨 25% 확률로 흰색 버블
+    if (Math.random() < 0.25) {
+      const shade = 220 + Math.random() * 35;
+      this.color = `rgb(${shade},${shade},${shade})`;
+    } else {
+      const r = 40 + Math.random() * 190;
+      const g = 40 + Math.random() * 190;
+      const b = 40 + Math.random() * 190;
+      this.color = `rgb(${r},${g},${b})`;
+    }
+
+    this.dx = (Math.random() - 0.5) * 4;
+    this.dy = (Math.random() - 0.5) * 4;
+  }
+
+  move() {
+    if (!this.popped) {
+      this.x += this.dx;
+      this.y += this.dy;
+      if (this.x - this.radius < 0 || this.x + this.radius > this.width)
+        this.dx *= -1;
+      if (this.y - this.radius < 0 || this.y + this.radius > this.height)
+        this.dy *= -1;
+    }
+  }
+
+  pop() {
+    this.popped = true;
+  }
+
+  updatePop() {
+    if (this.popped) {
+      this.expandRadius += 2.4;
+      this.waveRadius += 4.5;
+      if (this.expandRadius > this.radius * 6.5) {
+        this.opacity = 0;
+      }
+    }
+  }
+
+  draw(ctx) {
+    if (!this.popped) {
+      ctx.beginPath();
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = this.color;
+      ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1.0;
+      ctx.strokeStyle = "rgba(0,0,0,0.2)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    } else {
+      const baseColor = this.color.replace("rgb", "rgba").replace(")", ",0.6)");
+      for (let i = 0; i < 2; i++) {
+        const r = this.waveRadius + i * 6;
+        const alpha = Math.max(0, 0.6 - (r - this.radius) * 0.01);
+        if (alpha > 0) {
+          ctx.beginPath();
+          ctx.globalAlpha = alpha;
+          ctx.strokeStyle = baseColor;
+          ctx.lineWidth = 2;
+          ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+      for (let r = this.radius; r < this.expandRadius; r += 5) {
+        const alpha = Math.max(0, 0.4 - (r - this.radius) * 0.02);
+        if (alpha <= 0) break;
+        ctx.beginPath();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = baseColor;
+        ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1.0;
+    }
+  }
+}
+
+let bubbles = [];
+let popped = false;
+let fadeStart = null;
+let colorLayer = document.createElement("canvas");
+colorLayer.width = canvas.width;
+colorLayer.height = canvas.height;
+let colorCtx = colorLayer.getContext("2d");
+let screenshotSaved = false;
+let frameCount = 0;
+
+// 초기화
+function resetScene() {
+  bubbles = [];
+  for (let i = 0; i < 25; i++) {
+    bubbles.push(new Bubble(canvas.width, canvas.height));
+  }
+  colorCtx.clearRect(0, 0, canvas.width, canvas.height);
+  popped = false;
+  fadeStart = null;
+  screenshotSaved = false;
+  frameCount = 0;
+}
+
+resetScene();
+
+function fadeBackground() {
+  ctx.fillStyle = "rgba(255,255,255,0.14)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function animationLoop(timestamp) {
+  fadeBackground();
+
+  if (!popped) {
+    bubbles.forEach((b) => {
+      b.move();
+      b.draw(ctx);
+    });
+  } else {
+    const elapsed = (performance.now() - fadeStart) / 1000;
+    bubbles.forEach((b) => {
+      b.updatePop();
+      b.draw(ctx);
+    });
+
+    // 🎨 색 퍼짐 효과
+    if (elapsed < 4.0) {
+      let colors = bubbles.map((b) => b.color);
+      for (let i = 0; i < 12; i++) {
+        const c = colors[Math.floor(Math.random() * colors.length)];
+        const r = 20 + Math.random() * 70;
+        const alpha = 0.1 + Math.random() * 0.2;
+        colorCtx.beginPath();
+        colorCtx.globalAlpha = alpha;
+        colorCtx.fillStyle = c;
+        colorCtx.arc(
+          Math.random() * canvas.width,
+          Math.random() * canvas.height,
+          r,
+          0,
+          Math.PI * 2
+        );
+        colorCtx.fill();
+      }
+    }
+    ctx.drawImage(colorLayer, 0, 0);
+  }
+
+  frameCount++;
+  requestAnimationFrame(animationLoop);
+}
+
+// 키 입력: 스페이스
+window.addEventListener("keydown", (e) => {
+  if (e.code === "Space") {
+    if (!popped) {
+      popped = true;
+      fadeStart = performance.now();
+      bubbles.forEach((b) => b.pop());
+    } else {
+      resetScene();
+    }
+  }
+});
+
+requestAnimationFrame(animationLoop);
+
+</script>
+</body>
+</html>
