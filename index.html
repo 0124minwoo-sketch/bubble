@@ -2,22 +2,20 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <title>비눗방울 예술 (공유 기능 추가)</title>
+  <title>비눗방울 예술 (색상/레이어 순서 안정화 버전)</title>
   <style>
     html, body {
       margin: 0;
       padding: 0;
+      width: 100%;
       height: 100%;
-      overflow: hidden;
       background-color: #fff;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      font-family: "Pretendard", sans-serif;
+      overflow: hidden;
     }
     canvas {
       display: block;
+      width: 100vw;
+      height: 100vh;
       background-color: #ffffff;
       cursor: pointer;
     }
@@ -35,14 +33,8 @@
       transition: background-color 0.25s;
       z-index: 10;
     }
-    #saveBtn {
-      right: 20px;
-      background-color: #4CAF50;
-    }
-    #shareBtn {
-      right: 130px;
-      background-color: #2196F3;
-    }
+    #saveBtn { right: 20px; background-color: #4CAF50; }
+    #shareBtn { right: 130px; background-color: #2196F3; }
     #saveBtn:hover { background-color: #45a049; }
     #shareBtn:hover { background-color: #1976D2; }
     #toast {
@@ -59,9 +51,7 @@
       transition: opacity 0.5s ease;
       z-index: 10;
     }
-    #toast.show {
-      opacity: 1;
-    }
+    #toast.show { opacity: 1; }
   </style>
 </head>
 <body>
@@ -77,28 +67,18 @@
     const shareBtn = document.getElementById("shareBtn");
     const toast = document.getElementById("toast");
 
-    // ✅ 반응형 비율 유지
-    function resizeCanvas() {
-      const ratio = window.innerWidth / window.innerHeight;
-      if (ratio > 1.2) {
-        // PC: 16:9
-        const width = window.innerWidth;
-        const height = width * (9 / 16);
-        canvas.width = width;
-        canvas.height = height;
-      } else {
-        // 모바일: 전체 화면
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-      }
-    }
+    const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const MAX_DURATION = isMobile ? 2.0 : 4.0;
 
-    window.addEventListener("resize", () => {
-      resizeCanvas();
-      resetScene();
-    });
+    // 캔버스 리사이즈
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener("resize", resizeCanvas);
     resizeCanvas();
 
+    // 🎨 비눗방울 클래스
     class Bubble {
       constructor(width, height) {
         this.width = width;
@@ -106,23 +86,25 @@
         this.x = Math.random() * (width - 200) + 100;
         this.y = Math.random() * (height - 200) + 100;
         this.radius = 25 + Math.random() * 35;
+        this.color = this.randomColor();
         this.popped = false;
         this.expandRadius = this.radius;
         this.waveRadius = this.radius;
         this.opacity = 1.0;
+        this.dx = (Math.random() - 0.5) * 3.5;
+        this.dy = (Math.random() - 0.5) * 3.5;
+      }
 
+      randomColor() {
         if (Math.random() < 0.25) {
-          const shade = 220 + Math.random() * 35;
-          this.color = `rgb(${shade},${shade},${shade})`;
+          const s = 220 + Math.random() * 35;
+          return `rgb(${s},${s},${s})`;
         } else {
           const r = 40 + Math.random() * 190;
           const g = 40 + Math.random() * 190;
           const b = 40 + Math.random() * 190;
-          this.color = `rgb(${r},${g},${b})`;
+          return `rgb(${r},${g},${b})`;
         }
-
-        this.dx = (Math.random() - 0.5) * 3.5;
-        this.dy = (Math.random() - 0.5) * 3.5;
       }
 
       move() {
@@ -140,41 +122,39 @@
         if (this.popped) {
           this.expandRadius += 2.3;
           this.waveRadius += 4.2;
-          if (this.expandRadius > this.radius * 6.0) this.opacity = 0;
         }
       }
 
       draw(ctx) {
         if (!this.popped) {
           ctx.beginPath();
-          ctx.globalAlpha = 0.5;
+          ctx.globalAlpha = 0.55;
           ctx.fillStyle = this.color;
           ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
           ctx.fill();
           ctx.globalAlpha = 1.0;
-          ctx.strokeStyle = "rgba(0,0,0,0.2)";
-          ctx.lineWidth = 2;
-          ctx.stroke();
         } else {
-          const baseColor = this.color.replace("rgb", "rgba").replace(")", ",0.6)");
+          const base = this.color.replace("rgb", "rgba").replace(")", ",0.6)");
+          // 파동
           for (let i = 0; i < 2; i++) {
             const r = this.waveRadius + i * 6;
             const alpha = Math.max(0, 0.6 - (r - this.radius) * 0.01);
             if (alpha > 0) {
               ctx.beginPath();
               ctx.globalAlpha = alpha;
-              ctx.strokeStyle = baseColor;
+              ctx.strokeStyle = base;
               ctx.lineWidth = 2;
               ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
               ctx.stroke();
             }
           }
+          // 퍼짐
           for (let r = this.radius; r < this.expandRadius; r += 5) {
             const alpha = Math.max(0, 0.4 - (r - this.radius) * 0.02);
             if (alpha <= 0) break;
             ctx.beginPath();
             ctx.globalAlpha = alpha;
-            ctx.fillStyle = baseColor;
+            ctx.fillStyle = base;
             ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
             ctx.fill();
           }
@@ -186,42 +166,50 @@
     let bubbles = [];
     let popped = false;
     let fadeStart = null;
-    let colorLayer = document.createElement("canvas");
-    colorLayer.width = canvas.width;
-    colorLayer.height = canvas.height;
-    let colorCtx = colorLayer.getContext("2d");
+    let stopAll = false;
+
+    const colorLayer = document.createElement("canvas");
+    const colorCtx = colorLayer.getContext("2d");
 
     function resetScene() {
       bubbles = [];
       for (let i = 0; i < 25; i++) bubbles.push(new Bubble(canvas.width, canvas.height));
+      colorLayer.width = canvas.width;
+      colorLayer.height = canvas.height;
       colorCtx.clearRect(0, 0, canvas.width, canvas.height);
       popped = false;
       fadeStart = null;
+      stopAll = false;
     }
 
     resetScene();
 
+    // 배경 페이드
     function fadeBackground() {
-      ctx.fillStyle = "rgba(255,255,255,0.14)";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      if (!stopAll) {
+        ctx.fillStyle = "rgba(255,255,255,0.14)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
     }
 
     function animationLoop() {
       fadeBackground();
 
+      // 항상 제일 뒤에 색상 배경 먼저 그림
+      if (!stopAll) {
+        ctx.drawImage(colorLayer, 0, 0);
+      }
+
       if (!popped) {
-        bubbles.forEach((b) => {
-          b.move();
-          b.draw(ctx);
-        });
+        // 움직이는 버블
+        bubbles.forEach((b) => { b.move(); b.draw(ctx); });
       } else {
         const elapsed = (performance.now() - fadeStart) / 1000;
-        bubbles.forEach((b) => {
-          b.updatePop();
-          b.draw(ctx);
-        });
 
-        if (elapsed < 4.0) {
+        if (!stopAll && elapsed < MAX_DURATION) {
+          bubbles.forEach((b) => { b.updatePop(); b.draw(ctx); });
+
+          // 색상 퍼짐
           const colors = bubbles.map((b) => b.color);
           for (let i = 0; i < 12; i++) {
             const c = colors[Math.floor(Math.random() * colors.length)];
@@ -239,8 +227,15 @@
             );
             colorCtx.fill();
           }
+        } else if (!stopAll && elapsed >= MAX_DURATION) {
+          stopAll = true; // 더 이상 그림 없음
         }
-        ctx.drawImage(colorLayer, 0, 0);
+
+        // 멈춘 뒤에는 유지
+        if (stopAll) {
+          ctx.drawImage(colorLayer, 0, 0); // 배경 색 유지
+          bubbles.forEach((b) => { b.draw(ctx); }); // 버블을 맨 앞으로
+        }
       }
 
       requestAnimationFrame(animationLoop);
@@ -251,57 +246,52 @@
         popped = true;
         fadeStart = performance.now();
         bubbles.forEach((b) => b.pop());
-      } else {
+      } else if (stopAll) {
         resetScene();
       }
     }
+
     canvas.addEventListener("click", handlePopEvent);
     canvas.addEventListener("touchstart", (e) => {
       e.preventDefault();
       handlePopEvent();
     });
 
-    /* ✅ 저장 기능 */
-    function saveCanvasImage() {
+    // 저장/공유
+    saveBtn.addEventListener("click", () => {
       const now = new Date();
-      const timeStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}_${String(now.getHours()).padStart(2,"0")}${String(now.getMinutes()).padStart(2,"0")}${String(now.getSeconds()).padStart(2,"0")}`;
-      const filename = `bubble_art_${timeStr}.png`;
+      const filename = `bubble_art_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,"0")}${String(now.getDate()).padStart(2,"0")}_${String(now.getHours())}${String(now.getMinutes())}${String(now.getSeconds())}.png`;
       const link = document.createElement("a");
       link.download = filename;
       link.href = canvas.toDataURL("image/png");
       link.click();
       showToast("저장되었습니다!");
-    }
+    });
 
-    /* ✅ 공유 기능 */
-    async function shareCanvasImage() {
+    shareBtn.addEventListener("click", async () => {
       const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
       const file = new File([blob], "bubble_art.png", { type: "image/png" });
-
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
           await navigator.share({
-            title: "비눗방울 아트 작품 🎨",
+            title: "비눗방울 아트 🎨",
             text: "내가 만든 비눗방울 아트!",
             files: [file],
           });
           showToast("✅ 공유되었습니다!");
         } catch (err) {
-          console.log("공유 취소", err);
+          console.log("공유 취소:", err);
         }
       } else {
-        showToast("❌ 이 브라우저에서는 공유를 지원하지 않습니다.");
+        showToast("❌ 공유를 지원하지 않습니다.");
       }
-    }
+    });
 
     function showToast(msg) {
       toast.textContent = msg;
       toast.classList.add("show");
       setTimeout(() => toast.classList.remove("show"), 2000);
     }
-
-    saveBtn.addEventListener("click", saveCanvasImage);
-    shareBtn.addEventListener("click", shareCanvasImage);
 
     requestAnimationFrame(animationLoop);
   </script>
